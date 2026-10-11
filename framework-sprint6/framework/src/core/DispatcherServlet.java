@@ -194,14 +194,14 @@ public class DispatcherServlet extends HttpServlet {
     }
 
     // =========================
-    // PARAMETER BINDING (Sprint 7)
+    // PARAMETER BINDING (Sprint 7 + 7-bis)
     // =========================
 
     /**
      * Construit le tableau d'arguments à passer à method.invoke().
-     * Pour chaque paramètre, lit req.getParameter(nomDuParametre) et convertit
-     * la valeur String vers le type attendu par la méthode.
-     * Requiert que les contrôleurs soient compilés avec javac -parameters.
+     * - Type simple  → lecture directe de req.getParameter(nomParam)
+     * - Type objet   → construireObjet() avec le nom du paramètre comme préfixe
+     * Requiert javac -parameters pour les vrais noms.
      */
     private Object[] buildArgs(Method method, HttpServletRequest req) {
         Parameter[] params = method.getParameters();
@@ -211,11 +211,73 @@ public class DispatcherServlet extends HttpServlet {
         Object[] args = new Object[params.length];
         for (int i = 0; i < params.length; i++) {
             String nomParam = params[i].getName();
-            Class<?> type = params[i].getType();
-            String valeur = req.getParameter(nomParam);
-            args[i] = convertir(valeur, type);
+            Class<?> type   = params[i].getType();
+            if (estSimple(type)) {
+                String valeur = req.getParameter(nomParam);
+                args[i] = convertir(valeur, type);
+            } else {
+                args[i] = construireObjet(type, nomParam, req);
+            }
         }
         return args;
+    }
+
+    /**
+     * Retourne true si le type est considéré comme simple :
+     * primitifs, String, Number (Integer, Long, Double, Float…), Boolean.
+     */
+    private boolean estSimple(Class<?> type) {
+        return type.isPrimitive()
+            || type == String.class
+            || Number.class.isAssignableFrom(type)
+            || type == Boolean.class
+            || type == Character.class;
+    }
+
+    /**
+     * Crée une instance du type donné par réflexion (constructeur sans argument)
+     * et remplit ses attributs depuis les paramètres HTTP.
+     * Nom complet d'un champ = prefixe + "." + nomAttribut.
+     * Attribut simple  → req.getParameter(nomComplet) + conversion.
+     * Attribut objet   → appel récursif avec le préfixe allongé.
+     * Les attributs static sont ignorés.
+     */
+    private Object construireObjet(Class<?> type, String prefixe, HttpServletRequest req) {
+        try {
+            Object instance = type.getDeclaredConstructor().newInstance();
+
+            for (java.lang.reflect.Field field : type.getDeclaredFields()) {
+                // Ignorer les champs static
+                if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                    continue;
+                }
+
+                String nomChamp  = field.getName();
+                Class<?> typeChamp = field.getType();
+                String nomComplet = prefixe + "." + nomChamp;
+
+                Object valeurChamp;
+                if (estSimple(typeChamp)) {
+                    String raw = req.getParameter(nomComplet);
+                    valeurChamp = convertir(raw, typeChamp);
+                } else {
+                    valeurChamp = construireObjet(typeChamp, nomComplet, req);
+                }
+
+                // Appel du setter : setNom, setAge, setAdresse…
+                String nomSetter = "set"
+                    + Character.toUpperCase(nomChamp.charAt(0))
+                    + nomChamp.substring(1);
+                java.lang.reflect.Method setter =
+                    type.getMethod(nomSetter, typeChamp);
+                setter.invoke(instance, valeurChamp);
+            }
+            return instance;
+        } catch (Exception e) {
+            throw new RuntimeException(
+                "Erreur lors de la construction de " + type.getSimpleName()
+                + " (préfixe='" + prefixe + "')", e);
+        }
     }
 
     /**
@@ -227,34 +289,28 @@ public class DispatcherServlet extends HttpServlet {
      */
     private Object convertir(String valeur, Class<?> type) {
         if (type == String.class) {
-            return valeur; // null autorisé
+            return valeur;
         }
-        // Primitif int / Integer
         if (type == int.class || type == Integer.class) {
             if (valeur == null || valeur.isEmpty()) return type == int.class ? 0 : null;
             return Integer.parseInt(valeur);
         }
-        // Primitif long / Long
         if (type == long.class || type == Long.class) {
             if (valeur == null || valeur.isEmpty()) return type == long.class ? 0L : null;
             return Long.parseLong(valeur);
         }
-        // Primitif double / Double
         if (type == double.class || type == Double.class) {
             if (valeur == null || valeur.isEmpty()) return type == double.class ? 0.0 : null;
             return Double.parseDouble(valeur);
         }
-        // Primitif float / Float
         if (type == float.class || type == Float.class) {
             if (valeur == null || valeur.isEmpty()) return type == float.class ? 0.0f : null;
             return Float.parseFloat(valeur);
         }
-        // Primitif boolean / Boolean
         if (type == boolean.class || type == Boolean.class) {
             if (valeur == null || valeur.isEmpty()) return type == boolean.class ? false : null;
             return Boolean.parseBoolean(valeur);
         }
-        // Type non géré : retourner null
         return null;
     }
 
