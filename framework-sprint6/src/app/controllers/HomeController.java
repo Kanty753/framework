@@ -5,6 +5,7 @@ import java.io.IOException;
 import annotation.Controller;
 import annotation.UrlMapping;
 import annotation.WebApi;
+import app.models.Personne;
 import app.models.User;
 import jakarta.servlet.http.*;
 import utils.ModelAndView;
@@ -49,4 +50,21 @@ public class HomeController {
         mv.addAttribute("age", age);
         return mv;
     }
-}
+
+    // Sprint 7-bis étape 1 — binding d'objet simple
+    @UrlMapping(url = "/salut2", method = "POST")
+    public ModelAndView salut2(Personne p) {
+        ModelAndView mv = new ModelAndView("salut2");
+        mv.addAttribute("p", p);
+        return mv;
+    }
+
+    // Sprint 7-bis étape 2 — binding de deux objets imbriqués
+    @UrlMapping(url = "/salut3", method = "POST")
+    public ModelAndView salut3(Personne p1, Personne p2) {
+        ModelAndView mv = new ModelAndView("salut3");
+        mv.addAttribute("p1", p1);
+        mv.addAttribute("p2", p2);
+        return mv;
+    }
+}

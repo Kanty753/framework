@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formulaire – Sprint 7-bis étape 1</title>
+</head>
+<body>
+    <h1>Formulaire personne (objet simple + adresse imbriquée)</h1>
+    <form method="POST" action="app/salut2">
+        <fieldset>
+            <legend>Personne</legend>
+            <label for="p-nom">Nom :</label>
+            <input type="text" id="p-nom" name="p.nom" placeholder="Nom" required>
+            <br><br>
+            <label for="p-age">Âge :</label>
+            <input type="number" id="p-age" name="p.age" placeholder="Âge" required>
+        </fieldset>
+        <fieldset>
+            <legend>Adresse</legend>
+            <label for="p-adresse-rue">Rue :</label>
+            <input type="text" id="p-adresse-rue" name="p.adresse.rue" placeholder="Rue">
+            <br><br>
+            <label for="p-adresse-ville">Ville :</label>
+            <input type="text" id="p-adresse-ville" name="p.adresse.ville" placeholder="Ville">
+        </fieldset>
+        <br>
+        <button type="submit">Envoyer</button>
+    </form>
+</body>
+</html>

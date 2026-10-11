@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formulaire – Sprint 7-bis étape 2</title>
+</head>
+<body>
+    <h1>Formulaire deux personnes (objets imbriqués)</h1>
+    <form method="POST" action="app/salut3">
+
+        <fieldset>
+            <legend>Personne 1</legend>
+            <label for="p1-nom">Nom :</label>
+            <input type="text" id="p1-nom" name="p1.nom" placeholder="Nom" required>
+            <br><br>
+            <label for="p1-age">Âge :</label>
+            <input type="number" id="p1-age" name="p1.age" placeholder="Âge" required>
+            <br><br>
+            <label for="p1-rue">Rue :</label>
+            <input type="text" id="p1-rue" name="p1.adresse.rue" placeholder="Rue">
+            <br><br>
+            <label for="p1-ville">Ville :</label>
+            <input type="text" id="p1-ville" name="p1.adresse.ville" placeholder="Ville">
+        </fieldset>
+
+        <br>
+
+        <fieldset>
+            <legend>Personne 2</legend>
+            <label for="p2-nom">Nom :</label>
+            <input type="text" id="p2-nom" name="p2.nom" placeholder="Nom" required>
+            <br><br>
+            <label for="p2-age">Âge :</label>
+            <input type="number" id="p2-age" name="p2.age" placeholder="Âge" required>
+            <br><br>
+            <label for="p2-rue">Rue :</label>
+            <input type="text" id="p2-rue" name="p2.adresse.rue" placeholder="Rue">
+            <br><br>
+            <label for="p2-ville">Ville :</label>
+            <input type="text" id="p2-ville" name="p2.adresse.ville" placeholder="Ville">
+        </fieldset>
+
+        <br>
+        <button type="submit">Envoyer</button>
+    </form>
+</body>
+</html>
