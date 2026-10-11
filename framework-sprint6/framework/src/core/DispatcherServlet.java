@@ -2,6 +2,7 @@ package core;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -99,65 +100,58 @@ public class DispatcherServlet extends HttpServlet {
             try {
                 Object controllerInstance = controllerClasse.getDeclaredConstructor().newInstance();
 
-                if (method.getParameterCount() == 0) {
+                Object[] args = buildArgs(method, request);
+                Object result = method.invoke(controllerInstance, args);
 
-                    Object result = method.invoke(controllerInstance);
+                // Retour ModelAndView — forward vers JSP
+                if (result instanceof ModelAndView) {
+                    ModelAndView mv = (ModelAndView) result;
 
-                    // Retour ModelAndView — forward vers JSP
-                    if (result instanceof ModelAndView) {
-                        ModelAndView mv = (ModelAndView) result;
+                    if (response.isCommitted()) {
+                        throw new ServletException("Impossible de forward : la réponse est déjà commitée");
+                    }
 
-                        if (response.isCommitted()) {
-                            throw new ServletException("Impossible de forward : la réponse est déjà commitée");
+                    response.resetBuffer();
+                    response.setContentType("text/html;charset=UTF-8");
+
+                    String nomPackage = (String) getServletContext().getInitParameter("pafSource");
+                    String nomExtension = (String) getServletContext().getInitParameter("extension");
+                    String view = "/" + nomPackage + mv.getView() + nomExtension;
+
+                    Map<String, Object> attributes = mv.getAttributes();
+                    if (attributes != null) {
+                        for (Map.Entry<String, Object> entry : attributes.entrySet()) {
+                            request.setAttribute(entry.getKey(), entry.getValue());
                         }
-
-                        response.resetBuffer();
-                        response.setContentType("text/html;charset=UTF-8");
-
-                        String nomPackage = (String) getServletContext().getInitParameter("pafSource");
-                        String nomExtension = (String) getServletContext().getInitParameter("extension");
-                        String view = "/" + nomPackage + mv.getView() + nomExtension;
-
-                        Map<String, Object> attributes = mv.getAttributes();
-                        if (attributes != null) {
-                            for (Map.Entry<String, Object> entry : attributes.entrySet()) {
-                                request.setAttribute(entry.getKey(), entry.getValue());
-                            }
-                        }
-
-                        request.getRequestDispatcher(view).forward(request, response);
-                        return;
                     }
 
-                    // Retour JSON — contrôleur @WebApi sans paramètre
-                    if (utils.ControllerUtils.isWebApi(method)) {
-                        response.setContentType("application/json;charset=UTF-8");
-                        Gson gson = new Gson();
-                        String json = gson.toJson(result);
-                        response.getWriter().println(json);
-                        return;
-                    }
+                    request.getRequestDispatcher(view).forward(request, response);
+                    return;
+                }
 
-                    // Retour texte simple — contrôleur @Controller
-                    response.setContentType("text/plain");
-                    response.getWriter().println("=== ROUTE TROUVEE ===");
-                    response.getWriter().println("URL : " + path);
-                    response.getWriter().println("HTTP : " + httpMethod);
-                    response.getWriter().println("Controller : " + controllerClasse.getName());
-                    response.getWriter().println("Méthode Java : " + method.getName());
-                    response.getWriter().println();
-                    response.getWriter().println("=== RESULTAT DE L'EXECUTION ===");
+                // Retour JSON — contrôleur @WebApi
+                if (utils.ControllerUtils.isWebApi(method)) {
+                    response.setContentType("application/json;charset=UTF-8");
+                    Gson gson = new Gson();
+                    String json = gson.toJson(result);
+                    response.getWriter().println(json);
+                    return;
+                }
 
-                    if (method.getReturnType().equals(Void.TYPE)) {
-                        response.getWriter().println("(méthode void exécutée avec succès)");
-                    } else {
-                        response.getWriter().println(String.valueOf(result));
-                    }
+                // Retour texte simple — contrôleur @Controller
+                response.setContentType("text/plain");
+                response.getWriter().println("=== ROUTE TROUVEE ===");
+                response.getWriter().println("URL : " + path);
+                response.getWriter().println("HTTP : " + httpMethod);
+                response.getWriter().println("Controller : " + controllerClasse.getName());
+                response.getWriter().println("Méthode Java : " + method.getName());
+                response.getWriter().println();
+                response.getWriter().println("=== RESULTAT DE L'EXECUTION ===");
 
+                if (method.getReturnType().equals(Void.TYPE)) {
+                    response.getWriter().println("(méthode void exécutée avec succès)");
                 } else {
-                    response.setContentType("text/plain");
-                    response.getWriter().println("=== ERREUR ===");
-                    response.getWriter().println("Signature non supportée : " + method.getName());
+                    response.getWriter().println(String.valueOf(result));
                 }
 
             } catch (Exception e) {
@@ -197,6 +191,71 @@ public class DispatcherServlet extends HttpServlet {
         for (Class<?> controllerClass : controllerClasses) {
             response.getWriter().println(controllerClass.getName());
         }
+    }
+
+    // =========================
+    // PARAMETER BINDING (Sprint 7)
+    // =========================
+
+    /**
+     * Construit le tableau d'arguments à passer à method.invoke().
+     * Pour chaque paramètre, lit req.getParameter(nomDuParametre) et convertit
+     * la valeur String vers le type attendu par la méthode.
+     * Requiert que les contrôleurs soient compilés avec javac -parameters.
+     */
+    private Object[] buildArgs(Method method, HttpServletRequest req) {
+        Parameter[] params = method.getParameters();
+        if (params.length == 0) {
+            return new Object[0];
+        }
+        Object[] args = new Object[params.length];
+        for (int i = 0; i < params.length; i++) {
+            String nomParam = params[i].getName();
+            Class<?> type = params[i].getType();
+            String valeur = req.getParameter(nomParam);
+            args[i] = convertir(valeur, type);
+        }
+        return args;
+    }
+
+    /**
+     * Convertit une String (potentiellement null si absente) vers le type Java cible.
+     * Types supportés : String, int/Integer, long/Long, double/Double,
+     *                   float/Float, boolean/Boolean.
+     * Valeur absente (null) : valeur par défaut pour les primitifs (0 / false),
+     *                         null pour les types objet.
+     */
+    private Object convertir(String valeur, Class<?> type) {
+        if (type == String.class) {
+            return valeur; // null autorisé
+        }
+        // Primitif int / Integer
+        if (type == int.class || type == Integer.class) {
+            if (valeur == null || valeur.isEmpty()) return type == int.class ? 0 : null;
+            return Integer.parseInt(valeur);
+        }
+        // Primitif long / Long
+        if (type == long.class || type == Long.class) {
+            if (valeur == null || valeur.isEmpty()) return type == long.class ? 0L : null;
+            return Long.parseLong(valeur);
+        }
+        // Primitif double / Double
+        if (type == double.class || type == Double.class) {
+            if (valeur == null || valeur.isEmpty()) return type == double.class ? 0.0 : null;
+            return Double.parseDouble(valeur);
+        }
+        // Primitif float / Float
+        if (type == float.class || type == Float.class) {
+            if (valeur == null || valeur.isEmpty()) return type == float.class ? 0.0f : null;
+            return Float.parseFloat(valeur);
+        }
+        // Primitif boolean / Boolean
+        if (type == boolean.class || type == Boolean.class) {
+            if (valeur == null || valeur.isEmpty()) return type == boolean.class ? false : null;
+            return Boolean.parseBoolean(valeur);
+        }
+        // Type non géré : retourner null
+        return null;
     }
 
     @Override

@@ -40,4 +40,13 @@ public class HomeController {
     public User getUser() {
         return new User("Aina", "aina@itu.mg");
     }
+
+    // Sprint 7 — binding de paramètres simples
+    @UrlMapping(url = "/salut", method = "POST")
+    public ModelAndView salut(String nom, int age) {
+        ModelAndView mv = new ModelAndView("salut");
+        mv.addAttribute("nom", nom);
+        mv.addAttribute("age", age);
+        return mv;
+    }
 }
