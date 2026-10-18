@@ -1,6 +1,7 @@
 package core;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.ArrayList;
@@ -8,12 +9,21 @@ import java.util.List;
 import java.util.Map;
 
 import dto.ControllerResultDTO;
+import dto.MapFile;
 import dto.UrlMappingDTO;
 import utils.ModelAndView;
+import utils.UploadConfig;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.http.*;
 import com.google.gson.Gson;
 
+// Limite : 10 Mo par fichier, 50 Mo par requête, seuil mémoire 256 Ko
+@MultipartConfig(
+    maxFileSize      = 1024 * 1024 * 10,   // 10 Mo par fichier
+    maxRequestSize   = 1024 * 1024 * 50,    // 50 Mo au total
+    fileSizeThreshold = 1024 * 256           // 256 Ko en mémoire avant écriture disque
+)
 public class DispatcherServlet extends HttpServlet {
     List<Class<?>> controllerClasses = new ArrayList<>();
     Map<UrlMappingDTO, ControllerResultDTO> map;
@@ -260,6 +270,9 @@ public class DispatcherServlet extends HttpServlet {
                 if (estSimple(typeChamp)) {
                     String raw = req.getParameter(nomComplet);
                     valeurChamp = convertir(raw, typeChamp);
+                } else if (typeChamp == MapFile.class) {
+                    // Sprint 8 : binding d'un fichier uploadé
+                    valeurChamp = construireMapFile(nomComplet, req);
                 } else {
                     valeurChamp = construireObjet(typeChamp, nomComplet, req);
                 }
@@ -312,6 +325,67 @@ public class DispatcherServlet extends HttpServlet {
             return Boolean.parseBoolean(valeur);
         }
         return null;
+    }
+
+    // =========================
+    // UPLOAD DE FICHIERS (Sprint 8)
+    // =========================
+
+    /**
+     * Construit un MapFile à partir de la Part correspondante dans la requête.
+     * Gère les cas limites : requête non multipart, champ vide, nom dangereux.
+     *
+     * @param nomChamp le nom du champ formulaire (ex. "p.photo")
+     * @param req      la requête HTTP
+     * @return un MapFile rempli, ou null si aucun fichier n'a été envoyé
+     */
+    private MapFile construireMapFile(String nomChamp, HttpServletRequest req) {
+        try {
+            // Vérifier que la requête est bien multipart
+            String contentType = req.getContentType();
+            if (contentType == null || !contentType.toLowerCase().startsWith("multipart/")) {
+                System.out.println("[Upload] Requête non multipart, champ '" + nomChamp + "' ignoré.");
+                return null;
+            }
+
+            // Récupérer la Part correspondante
+            Part part = req.getPart(nomChamp);
+
+            // Aucun fichier envoyé pour ce champ
+            if (part == null || part.getSize() == 0) {
+                return null;
+            }
+
+            // Extraire le nom de fichier d'origine
+            String nomOriginal = part.getSubmittedFileName();
+            if (nomOriginal == null || nomOriginal.trim().isEmpty()) {
+                // C'est un champ texte, pas un fichier
+                return null;
+            }
+
+            // Nettoyer le nom contre le path traversal
+            String nomNettoye = UploadConfig.nettoyerNomFichier(nomOriginal);
+
+            // Lire le contenu en byte[]
+            byte[] contenu;
+            try (InputStream is = part.getInputStream()) {
+                contenu = is.readAllBytes();
+            }
+
+            // Récupérer le type MIME
+            String typeMime = part.getContentType();
+
+            return new MapFile(nomNettoye, typeMime, contenu);
+
+        } catch (IllegalStateException e) {
+            // Déclenché quand le fichier dépasse la limite @MultipartConfig
+            throw new RuntimeException(
+                "Fichier trop volumineux pour le champ '" + nomChamp
+                + "'. Vérifiez les limites dans @MultipartConfig.", e);
+        } catch (Exception e) {
+            throw new RuntimeException(
+                "Erreur lors de la lecture du fichier pour le champ '" + nomChamp + "'", e);
+        }
     }
 
     @Override

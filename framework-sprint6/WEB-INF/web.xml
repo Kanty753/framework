@@ -28,6 +28,11 @@
     <servlet>
         <servlet-name>FrontController</servlet-name>
         <servlet-class>core.DispatcherServlet</servlet-class>
+        <multipart-config>
+            <max-file-size>10485760</max-file-size>          <!-- 10 Mo -->
+            <max-request-size>52428800</max-request-size>    <!-- 50 Mo -->
+            <file-size-threshold>262144</file-size-threshold> <!-- 256 Ko -->
+        </multipart-config>
     </servlet>
 
     <servlet-mapping>
