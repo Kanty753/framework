@@ -1,14 +1,19 @@
 package app.controllers;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 
 import annotation.Controller;
 import annotation.UrlMapping;
 import annotation.WebApi;
 import app.models.Personne;
+import app.models.Produit;
 import app.models.User;
-import jakarta.servlet.http.*;
+import dto.MapFile;
 import utils.ModelAndView;
+import utils.UploadConfig;
+import jakarta.servlet.http.*;
 
 @Controller
 public class HomeController {
@@ -67,4 +72,28 @@ public class HomeController {
         mv.addAttribute("p2", p2);
         return mv;
     }
-}
+
+    // Sprint 8 — upload de fichiers
+    @UrlMapping(url = "/upload", method = "POST")
+    public ModelAndView upload(Produit p) {
+        ModelAndView mv = new ModelAndView("upload");
+
+        // Si un fichier a été uploadé, le sauvegarder sur disque
+        MapFile photo = p.getPhoto();
+        if (photo != null && !photo.estVide()) {
+            String dossier = UploadConfig.getInstance().getCheminUpload();
+            File destination = new File(dossier, photo.getNomFichier());
+
+            try (FileOutputStream fos = new FileOutputStream(destination)) {
+                fos.write(photo.getContenu());
+                System.out.println("[Upload] Fichier sauvegardé : " + destination.getAbsolutePath());
+            } catch (IOException e) {
+                throw new RuntimeException("Erreur lors de la sauvegarde du fichier", e);
+            }
+        }
+
+        mv.addAttribute("p", p);
+        return mv;
+    }
+}
+

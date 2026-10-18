@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formulaire – Sprint 8 Upload</title>
+</head>
+<body>
+    <h1>Ajout d'un produit avec photo</h1>
+
+    <!-- IMPORTANT : enctype="multipart/form-data" est obligatoire pour l'upload -->
+    <form method="POST" action="app/upload" enctype="multipart/form-data">
+
+        <label for="nom">Nom du produit :</label>
+        <input type="text" id="nom" name="p.nom" placeholder="Ex: Smartphone" required>
+        <br><br>
+
+        <label for="prix">Prix :</label>
+        <input type="number" step="0.01" id="prix" name="p.prix" placeholder="Ex: 599.99" required>
+        <br><br>
+
+        <label for="photo">Photo :</label>
+        <input type="file" id="photo" name="p.photo" accept="image/*">
+        <br><br>
+
+        <button type="submit">Envoyer</button>
+    </form>
+</body>
+</html>
