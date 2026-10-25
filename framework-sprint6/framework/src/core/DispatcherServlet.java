@@ -12,6 +12,7 @@ import dto.ControllerResultDTO;
 import dto.MapFile;
 import dto.UrlMappingDTO;
 import utils.ModelAndView;
+import utils.MySession;
 import utils.UploadConfig;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.MultipartConfig;
@@ -222,15 +223,49 @@ public class DispatcherServlet extends HttpServlet {
         for (int i = 0; i < params.length; i++) {
             String nomParam = params[i].getName();
             Class<?> type   = params[i].getType();
-            if (estSimple(type)) {
+
+            // Injection de MySession
+            if (type == MySession.class) {
+                args[i] = getOrCreateMySession(req);
+            }
+            // Types simples (String, int, double…)
+            else if (estSimple(type)) {
                 String valeur = req.getParameter(nomParam);
                 args[i] = convertir(valeur, type);
-            } else {
+            }
+            // Types complexes (objets, MapFile…)
+            else {
                 args[i] = construireObjet(type, nomParam, req);
             }
         }
         return args;
     }
+
+    /**
+     * Récupère l'instance unique de {@link MySession} pour la session HTTP
+     * courante, ou la crée si c'est le premier accès.
+     *
+     * L'instance est stockée dans le {@code ServletContext} avec la clé
+     * {@code "mySession_" + sessionId} pour garantir une seule instance
+     * par session et par application.
+     */
+    private MySession getOrCreateMySession(HttpServletRequest req) {
+        HttpSession httpSession = req.getSession(true);
+        String contextKey = MySession.CONTEXT_KEY_PREFIX + httpSession.getId();
+
+        // Chercher dans le contexte applicatif
+        MySession mySession = (MySession) getServletContext().getAttribute(contextKey);
+
+        if (mySession == null) {
+            // Première requête de cette session : créer et enregistrer
+            mySession = new MySession(httpSession);
+            getServletContext().setAttribute(contextKey, mySession);
+            System.out.println("[DispatcherServlet] Nouvelle MySession créée pour : " + httpSession.getId());
+        }
+
+        return mySession;
+    }
+
 
     /**
      * Retourne true si le type est considéré comme simple :
