@@ -43,44 +43,6 @@ public class DispatcherServlet extends HttpServlet {
         System.out.println("DispatcherServlet initialisé, " + map.size() + " route(s) chargée(s).");
     }
 
-    // private String toJson(Object obj) {
-    // if (obj == null)
-    // return "null";
-    // if (obj instanceof String)
-    // return "\"" + obj + "\"";
-    // if (obj instanceof Number || obj instanceof Boolean)
-    // return obj.toString();
-
-    // // Objet — on lit les getters par réflexion
-    // StringBuilder sb = new StringBuilder("{");
-    // boolean first = true;
-
-    // for (java.lang.reflect.Method m : obj.getClass().getMethods()) {
-    // String name = m.getName();
-    // if ((name.startsWith("get") && !name.equals("getClass") &&
-    // m.getParameterCount() == 0)
-    // || (name.startsWith("is") && m.getParameterCount() == 0)) {
-
-    // String fieldName = name.startsWith("is")
-    // ? Character.toLowerCase(name.charAt(2)) + name.substring(3)
-    // : Character.toLowerCase(name.charAt(3)) + name.substring(4);
-
-    // try {
-    // Object value = m.invoke(obj);
-    // if (!first)
-    // sb.append(",");
-    // sb.append("\"").append(fieldName).append("\":");
-    // sb.append(toJson(value));
-    // first = false;
-    // } catch (Exception ignored) {
-    // }
-    // }
-    // }
-
-    // sb.append("}");
-    // return sb.toString();
-    // }
-
     public void affichage(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
@@ -107,6 +69,57 @@ public class DispatcherServlet extends HttpServlet {
 
             Method method = found.getMethod();
             Class<?> controllerClasse = found.getClasse();
+
+            // ========================= AUTORISATION (Sprint 10) =========================
+            // Obtenir la session EXISTANTE sans la créer si elle n'existe pas encore.
+            // Cela évite de créer une session HTTP inutile pour les visiteurs anonymes
+            // qui accèdent à des routes publiques.
+            HttpSession httpSess = request.getSession(false);
+            MySession sessionAuth = null;
+            if (httpSess != null) {
+                String ctxKey = MySession.CONTEXT_KEY_PREFIX + httpSess.getId();
+                sessionAuth = (MySession) getServletContext().getAttribute(ctxKey);
+            }
+            // sessionAuth peut être null → AuthorizationChecker gère ce cas (NON_AUTHENTIFIE)
+
+            utils.AuthorizationChecker checker = new utils.AuthorizationChecker();
+            utils.AuthorizationChecker.AuthResult authResult =
+                checker.check(method, controllerClasse, sessionAuth);
+
+            if (authResult != utils.AuthorizationChecker.AuthResult.OK) {
+                boolean estWebApi = utils.ControllerUtils.isWebApi(method);
+
+                if (authResult == utils.AuthorizationChecker.AuthResult.NON_AUTHENTIFIE) {
+                    // Utilisateur non connecté
+                    if (estWebApi || "status".equals(utils.AuthConfig.getInstance().getDeniedMode())) {
+                        // API ou mode status → 401 JSON
+                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                        response.setContentType("application/json;charset=UTF-8");
+                        response.getWriter().println("{\"erreur\":\"Authentification requise\",\"code\":401}");
+                    } else {
+                        // Mode redirect → 302 vers la page de login
+                        response.setStatus(HttpServletResponse.SC_FOUND);
+                        response.sendRedirect(utils.AuthConfig.getInstance().getLoginUrl());
+                    }
+                    return;
+                }
+
+                if (authResult == utils.AuthorizationChecker.AuthResult.INTERDIT) {
+                    // Utilisateur connecté mais rôle insuffisant → 403
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    if (estWebApi) {
+                        response.setContentType("application/json;charset=UTF-8");
+                        response.getWriter().println(
+                            "{\"erreur\":\"Accès interdit : rôle insuffisant\",\"code\":403}");
+                    } else {
+                        response.setContentType("text/plain;charset=UTF-8");
+                        response.getWriter().println(
+                            "403 - Accès interdit : vous n'avez pas le rôle requis pour accéder à cette ressource.");
+                    }
+                    return;
+                }
+            }
+            // ============================================================================
 
             try {
                 Object controllerInstance = controllerClasse.getDeclaredConstructor().newInstance();
@@ -248,6 +261,10 @@ public class DispatcherServlet extends HttpServlet {
      * L'instance est stockée dans le {@code ServletContext} avec la clé
      * {@code "mySession_" + sessionId} pour garantir une seule instance
      * par session et par application.
+     *
+     * TODO Sprint 11 : gestion du changeSessionId — si HttpSession.changeSessionId()
+     * est appelé, l'ancienne clé dans le ServletContext devient orpheline.
+     * Il faudra exposer une méthode refreshSession() dans MySession ou ici.
      */
     private MySession getOrCreateMySession(HttpServletRequest req) {
         HttpSession httpSession = req.getSession(true);
