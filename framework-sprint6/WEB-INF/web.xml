@@ -25,6 +25,11 @@
         <listener-class>listener.AppListener</listener-class>
     </listener>
 
+    <listener>
+        <listener-class>listener.SessionListener</listener-class>
+    </listener>
+
+
     <servlet>
         <servlet-name>FrontController</servlet-name>
         <servlet-class>core.DispatcherServlet</servlet-class>
