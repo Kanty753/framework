@@ -9,7 +9,7 @@ import utils.ModelAndView;
 import utils.MySession;
 
 /**
- * Contrôleur de test pour le Sprint 10 — Système d'autorisation.
+ * Contrôleur de test pour le Sprint 10 et 10-bis — Système d'autorisation et rôles.
  *
  * Démontre les trois niveaux d'accès :
  *   1. Routes publiques (aucune annotation) — accessibles par tous
@@ -19,6 +19,10 @@ import utils.MySession;
  * Utilisateurs en dur (pour les tests) :
  *   - admin / admin123 → rôle "admin"
  *   - user  / user123  → rôle "user"
+ *
+ * Routes Sprint 10-bis ajoutées :
+ *   - GET /rh        → @Role({"admin","rh"}) — teste le cas «au moins un rôle»
+ *   - GET /api/admin → @WebApi + @Role("admin") — teste le 403 JSON pour les API
  *
  * NOTE : Le changement d'ID de session après login (changeSessionId)
  * n'est pas géré dans ce sprint car MySession est indexée par l'ancien ID.
@@ -127,5 +131,35 @@ public class TestController {
         ModelAndView mv = new ModelAndView("login");
         mv.addAttribute("message", "Déconnexion réussie");
         return mv;
+    }
+
+    // -----------------------------------------------------------------------
+    // RH — @Role({"admin","rh"}) : réservé aux admins OU aux membres RH
+    // Démontre le cas « au moins un des rôles » (Sprint 10-bis)
+    // -----------------------------------------------------------------------
+
+    @UrlMapping(url = "/rh", method = "GET")
+    @Role({"admin", "rh"})
+    public ModelAndView rh(MySession session) {
+        ModelAndView mv = new ModelAndView("rh");
+        mv.addAttribute("user", session.get("user"));
+        mv.addAttribute("role", session.get("role"));
+        return mv;
+    }
+
+    // -----------------------------------------------------------------------
+    // API Admin — @WebApi + @Role("admin") : 403 JSON si rôle insuffisant
+    // Démontre le 403 en JSON pour une API protégée par rôle (Sprint 10-bis)
+    // -----------------------------------------------------------------------
+
+    @WebApi
+    @UrlMapping(url = "/api/admin", method = "GET")
+    @Role("admin")
+    public Object apiAdmin(MySession session) {
+        return new java.util.HashMap<String, Object>() {{
+            put("user", session.get("user"));
+            put("role", session.get("role"));
+            put("acces", "panneau d'administration API");
+        }};
     }
 }

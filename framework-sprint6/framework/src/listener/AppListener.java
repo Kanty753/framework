@@ -51,6 +51,17 @@ public class AppListener implements ServletContextListener {
                         + classe.getSimpleName() + "." + m.getName()
                         + " — une mauvaise configuration ne doit jamais ouvrir l'accès.");
                 }
+                // Règle 1-bis : @Role ne doit pas contenir de chaîne vide (Sprint 10-bis)
+                if (roleAnnotation != null) {
+                    for (String role : roleAnnotation.value()) {
+                        if (role == null || role.trim().isEmpty()) {
+                            throw new RuntimeException(
+                                "@Role contient un rôle vide ou null sur "
+                                + classe.getSimpleName() + "." + m.getName()
+                                + " — une chaîne vide n'est jamais un rôle valide.");
+                        }
+                    }
+                }
 
                 // Règle 2 : mode "redirect" sans URL de login est interdit si des routes sont protégées
                 boolean aAnnotationAuth =
