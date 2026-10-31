@@ -29,6 +29,17 @@ public class DispatcherServlet extends HttpServlet {
     List<Class<?>> controllerClasses = new ArrayList<>();
     Map<UrlMappingDTO, ControllerResultDTO> map;
 
+    /**
+     * Registre des instances de contrôleurs — Sprint 11.
+     * Une seule instance par classe, créée au premier appel (lazy, thread-safe).
+     *
+     * ⚠ Les contrôleurs sont partagés entre toutes les requêtes et tous les
+     * utilisateurs : ils ne doivent jamais stocker d'état propre à une requête
+     * ou à un utilisateur dans leurs champs. Utiliser les paramètres de méthode
+     * et {@link utils.MySession} à la place.
+     */
+    private final utils.ControllerRegistry controllerRegistry = new utils.ControllerRegistry();
+
     @Override
     @SuppressWarnings("unchecked")
     public void init() throws ServletException {
@@ -122,7 +133,9 @@ public class DispatcherServlet extends HttpServlet {
             // ============================================================================
 
             try {
-                Object controllerInstance = controllerClasse.getDeclaredConstructor().newInstance();
+                // Sprint 11 : instance unique par classe (lazy, thread-safe via ControllerRegistry)
+                // L'autorisation a déjà été vérifiée — on n'instancie que si l'accès est accordé.
+                Object controllerInstance = controllerRegistry.obtenirInstance(controllerClasse);
 
                 Object[] args = buildArgs(method, request);
                 Object result = method.invoke(controllerInstance, args);
@@ -450,5 +463,16 @@ public class DispatcherServlet extends HttpServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         affichage(request, response);
+    }
+
+    /**
+     * Libère les ressources du servlet — Sprint 11.
+     * Vide le registre des instances de contrôleurs à l'arrêt de l'application.
+     */
+    @Override
+    public void destroy() {
+        controllerRegistry.vider();
+        System.out.println("[DispatcherServlet] Servlet détruit, registre des contrôleurs vidé.");
+        super.destroy();
     }
 }
