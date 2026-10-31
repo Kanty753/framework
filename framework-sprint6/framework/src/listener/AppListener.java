@@ -31,6 +31,44 @@ public class AppListener implements ServletContextListener {
                 System.out.println("  [" + key.getMethod() + "] " + key.getUrl()
                         + " -> " + val.getClasse().getSimpleName() + "." + val.getMethod().getName() + "()");
             }
+
+            // ========================= VALIDATION FAIL-FAST (Sprint 10) =========================
+            // Vérifie au démarrage que les annotations d'autorisation sont cohérentes.
+            // Une mauvaise configuration ne doit JAMAIS ouvrir l'accès par défaut.
+            utils.AuthConfig authConfig = utils.AuthConfig.getInstance();
+            for (Map.Entry<dto.UrlMappingDTO, dto.ControllerResultDTO> entry : map.entrySet()) {
+                java.lang.reflect.Method m = entry.getValue().getMethod();
+                Class<?> classe = entry.getValue().getClasse();
+
+                // Règle 1 : @Role avec tableau de rôles vide est interdit
+                // Un tableau vide ne protège rien → erreur de configuration explicite
+                annotation.Role roleAnnotation = m.isAnnotationPresent(annotation.Role.class)
+                    ? m.getAnnotation(annotation.Role.class)
+                    : classe.getAnnotation(annotation.Role.class);
+                if (roleAnnotation != null && roleAnnotation.value().length == 0) {
+                    throw new RuntimeException(
+                        "@Role avec tableau vide sur "
+                        + classe.getSimpleName() + "." + m.getName()
+                        + " — une mauvaise configuration ne doit jamais ouvrir l'accès.");
+                }
+
+                // Règle 2 : mode "redirect" sans URL de login est interdit si des routes sont protégées
+                boolean aAnnotationAuth =
+                    m.isAnnotationPresent(annotation.Authenticated.class)
+                    || m.isAnnotationPresent(annotation.Role.class)
+                    || classe.isAnnotationPresent(annotation.Authenticated.class)
+                    || classe.isAnnotationPresent(annotation.Role.class);
+                if (aAnnotationAuth
+                    && "redirect".equals(authConfig.getDeniedMode())
+                    && (authConfig.getLoginUrl() == null || authConfig.getLoginUrl().trim().isEmpty())) {
+                    throw new RuntimeException(
+                        "Mode 'redirect' configuré sans auth.login.url"
+                        + " — impossible de rediriger vers la page de login.");
+                }
+            }
+            System.out.println("=== AppListener : Validation des autorisations réussie ===");
+            // =====================================================================================
+
         } catch (RuntimeException e) {
             System.out.println("Erreur AppListener : " + e.getMessage());
             throw e;
